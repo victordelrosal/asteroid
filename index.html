@@ -63,6 +63,22 @@
             text-shadow: 0 0 10px #ff00ff;
         }
         
+        .progress-container {
+            margin-top: 10px;
+        }
+        .progress-bar {
+            width: 200px;
+            height: 12px;
+            background: #222;
+            border: 1px solid #00ffff;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .progress-inner {
+            height: 100%;
+            width: 100%;
+            background: #00ff00;
+        }
         .weapon-selector {
             display: flex;
             flex-direction: column;
@@ -202,6 +218,9 @@
         <div class="ui-panel">
             <div class="score-display">SCORE: <span id="score">0</span></div>
             <div class="level-display">LEVEL: <span id="level">1</span></div>
+            <div class="progress-container">
+                <div class="progress-bar"><div class="progress-inner" id="levelProgress"></div></div>
+            </div>
         </div>
         
         <div class="ui-panel weapon-selector">
@@ -239,6 +258,11 @@
         let gameRunning = true;
         let currentWeapon = 0;
 
+        const MAX_LEVELS = 10;
+        let asteroidsToSpawn = 0;
+        let totalAsteroids = 0;
+        let remainingAsteroids = 0;
+        let levelParams = null;
         // Audio setup for weapon sounds
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const weaponSoundSettings = [
@@ -262,6 +286,46 @@
             oscillator.stop(audioCtx.currentTime + 0.2);
         }
         
+        function getLevelParams(l) {
+            return {
+                count: 5 + l * 2,
+                sizeMult: 1 + l * 0.1,
+                healthMult: 1 + l * 0.2,
+                speedMult: 1 + l * 0.05
+            };
+        }
+
+        function startLevel() {
+            levelParams = getLevelParams(level);
+            document.getElementById("level").textContent = level;
+            asteroids.length = 0;
+            bullets.length = 0;
+            asteroidsToSpawn = levelParams.count;
+            totalAsteroids = 0;
+            remainingAsteroids = 0;
+            spawnAsteroids();
+            updateProgress();
+        }
+
+        function updateProgress() {
+            const progress = document.getElementById("levelProgress");
+            const total = totalAsteroids + asteroidsToSpawn;
+            const remaining = remainingAsteroids + asteroidsToSpawn;
+            const percent = total ? (remaining / total) * 100 : 0;
+            progress.style.width = percent + "%";
+        }
+
+        function checkLevelComplete() {
+            if (remainingAsteroids === 0 && asteroidsToSpawn === 0) {
+                level++;
+                if (level > MAX_LEVELS) {
+                    gameOver();
+                } else {
+                    startLevel();
+                }
+            }
+        }
+
         // Weapon definitions
         const weapons = [
             {
@@ -445,15 +509,16 @@
             }
             
             destroy() {
+                remainingAsteroids--;
                 // Create explosion
                 for (let i = 0; i < 30; i++) {
                     particles.push(new Particle(
                         this.x + (Math.random() - 0.5) * this.size,
                         this.y + (Math.random() - 0.5) * this.size,
-                        '#ffaa00'
+                        "#ffaa00"
                     ));
                 }
-                
+
                 // Split into smaller asteroids
                 if (this.size > 20) {
                     for (let i = 0; i < 2; i++) {
@@ -468,16 +533,17 @@
                         newAsteroid.vx = (Math.random() - 0.5) * 5;
                         newAsteroid.vy = (Math.random() - 0.5) * 3 + 1;
                         asteroids.push(newAsteroid);
+                        remainingAsteroids++;
+                        totalAsteroids++;
                     }
                 }
-                
+
                 // Score based on size
                 score += Math.floor(100 * (50 / this.size));
                 updateScore();
+                updateProgress();
+                checkLevelComplete();
             }
-        }
-        
-        // Bullet class
         class Bullet {
             constructor(x, y, angle, weapon) {
                 this.x = x;
@@ -691,42 +757,28 @@
         }
         
         function spawnAsteroids() {
-            const count = 3 + Math.floor(level / 2);
+            const count = Math.min(2, asteroidsToSpawn);
             for (let i = 0; i < count; i++) {
-                const size = 30 + Math.random() * 40 + (level * 5);
-                const health = Math.ceil(size / 15);
-                asteroids.push(new Asteroid(
+                const size = (30 + Math.random() * 40) * levelParams.sizeMult;
+                const health = Math.ceil(size / 15 * levelParams.healthMult);
+                const asteroid = new Asteroid(
                     Math.random() * canvas.width,
                     -100 - Math.random() * 200,
                     size,
                     health
-                ));
+                );
+                asteroid.vx *= levelParams.speedMult;
+                asteroid.vy *= levelParams.speedMult;
+                asteroids.push(asteroid);
+                asteroidsToSpawn--;
+                remainingAsteroids++;
+                totalAsteroids++;
             }
+            updateProgress();
         }
-        
         function updateScore() {
-            document.getElementById('score').textContent = score;
-            
-            // Check for level up
-            const nextLevelScore = level * 1000;
-            if (score >= nextLevelScore) {
-                level++;
-                document.getElementById('level').textContent = level;
-                
-                // Level up effect
-                for (let i = 0; i < 100; i++) {
-                    const angle = (Math.PI * 2 * i) / 100;
-                    particles.push(new Particle(
-                        canvas.width / 2,
-                        canvas.height / 2,
-                        '#00ffff',
-                        Math.cos(angle) * 15,
-                        Math.sin(angle) * 15
-                    ));
-                }
-            }
+            document.getElementById("score").textContent = score;
         }
-        
         function drawPlayer() {
             ctx.save();
             ctx.translate(player.x, player.y);
@@ -765,22 +817,19 @@
         
         function restart() {
             score = 0;
+        function restart() {
+            score = 0;
             level = 1;
             currentWeapon = 0;
             gameRunning = true;
-            asteroids.length = 0;
-            bullets.length = 0;
-            particles.length = 0;
             player.lastShot = 0;
-            
+
             updateScore();
-            document.getElementById('level').textContent = level;
             updateWeaponUI();
-            document.getElementById('gameOver').style.display = 'none';
-            
-            spawnAsteroids();
+            document.getElementById("gameOver").style.display = "none";
+
+            startLevel();
         }
-        
         document.getElementById('restartBtn').addEventListener('click', restart);
         
         function gameLoop() {
@@ -839,7 +888,7 @@
                 }
                 
                 // Spawn new asteroids
-                if (asteroids.length < 2) {
+                if (asteroids.length < 2 && asteroidsToSpawn > 0) {
                     spawnAsteroids();
                 }
                 
@@ -870,8 +919,7 @@
         
         // Start game
         updateWeaponUI();
-        spawnAsteroids();
-        gameLoop();
+        startLevel();
     </script>
 </body>
 </html>
