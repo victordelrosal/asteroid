@@ -242,11 +242,16 @@
         // Audio setup for weapon sounds
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const weaponSoundSettings = [
-            { type: 'sawtooth', frequency: 600 },
-            { type: 'square',   frequency: 350 },
-            { type: 'triangle', frequency: 250 },
-            { type: 'sine',     frequency: 450 },
-            { type: 'sine',     frequency: 120 }
+            // Laser – quick high pitched blast
+            { type: 'sawtooth', start: 1000, duration: 0.15 },
+            // Plasma – slightly lower buzzing sound
+            { type: 'square', start: 500, duration: 0.25 },
+            // Missile – descending whine
+            { type: 'triangle', start: 300, end: 150, duration: 0.4 },
+            // Wave – smooth sine tone
+            { type: 'sine', start: 350, duration: 0.3 },
+            // Nuke – deep booming impact
+            { type: 'square', start: 80, end: 40, duration: 0.6 }
         ];
 
         function playWeaponSound(index) {
@@ -254,12 +259,21 @@
             const oscillator = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             oscillator.type = settings.type;
-            oscillator.frequency.value = settings.frequency;
+            oscillator.frequency.value = settings.start;
+            if (settings.end) {
+                oscillator.frequency.exponentialRampToValueAtTime(
+                    settings.end,
+                    audioCtx.currentTime + settings.duration
+                );
+            }
             gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+            gain.gain.exponentialRampToValueAtTime(
+                0.001,
+                audioCtx.currentTime + settings.duration
+            );
             oscillator.connect(gain).connect(audioCtx.destination);
             oscillator.start();
-            oscillator.stop(audioCtx.currentTime + 0.2);
+            oscillator.stop(audioCtx.currentTime + settings.duration);
         }
         
         // Weapon definitions
