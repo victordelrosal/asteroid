@@ -238,6 +238,29 @@
         let level = 1;
         let gameRunning = true;
         let currentWeapon = 0;
+
+        // Audio setup for weapon sounds
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const weaponSoundSettings = [
+            { type: 'sawtooth', frequency: 600 },
+            { type: 'square',   frequency: 350 },
+            { type: 'triangle', frequency: 250 },
+            { type: 'sine',     frequency: 450 },
+            { type: 'sine',     frequency: 120 }
+        ];
+
+        function playWeaponSound(index) {
+            const settings = weaponSoundSettings[index];
+            const oscillator = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            oscillator.type = settings.type;
+            oscillator.frequency.value = settings.frequency;
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+            oscillator.connect(gain).connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.2);
+        }
         
         // Weapon definitions
         const weapons = [
@@ -654,6 +677,7 @@
             if (now - player.lastShot > weapon.fireRate) {
                 bullets.push(new Bullet(player.x, player.y, player.angle, weapon));
                 player.lastShot = now;
+                playWeaponSound(currentWeapon);
                 
                 // Muzzle flash
                 for (let i = 0; i < 5; i++) {
