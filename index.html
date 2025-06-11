@@ -558,6 +558,7 @@
                 updateProgress();
                 checkLevelComplete();
             }
+        }
         class Bullet {
             constructor(x, y, angle, weapon) {
                 this.x = x;
@@ -829,8 +830,6 @@
             document.getElementById('gameOver').style.display = 'block';
         }
         
-        function restart() {
-            score = 0;
         function restart() {
             score = 0;
             level = 1;
