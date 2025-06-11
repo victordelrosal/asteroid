@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Destroyer - Asteroid Shooter</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Orbitron', monospace;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+        
+        #gameCanvas {
+            display: block;
+            background: radial-gradient(circle at 50% 50%, #0a0a2e 0%, #000 100%);
+        }
+        
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .ui-panel {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ffff;
+            border-radius: 15px;
+            padding: 15px 25px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5), inset 0 0 20px rgba(0, 255, 255, 0.2);
+            pointer-events: auto;
+        }
+        
+        .score-display {
+            font-size: 24px;
+            font-weight: 700;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+            margin-bottom: 10px;
+        }
+        
+        .level-display {
+            font-size: 18px;
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff;
+        }
+        
+        .weapon-selector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .weapon-name {
+            font-size: 20px;
+            font-weight: 900;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            animation: glow 2s ease-in-out infinite;
+        }
+        
+        .weapon-list {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .weapon-item {
+            width: 60px;
+            height: 60px;
+            border: 2px solid #444;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.3s ease;
+            background: rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .weapon-item.active {
+            border-color: #00ff00;
+            transform: scale(1.2);
+            box-shadow: 0 0 20px #00ff00, inset 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+        
+        .weapon-item::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, transparent, #00ff00, transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+            animation: rotate 2s linear infinite;
+        }
+        
+        .weapon-item.active::before {
+            opacity: 1;
+        }
+        
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes glow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            z-index: 20;
+        }
+        
+        #gameOver h2 {
+            font-size: 60px;
+            font-weight: 900;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #ff006e, #8338ec, #3a86ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(255, 0, 110, 0.5);
+        }
+        
+        #gameOver p {
+            font-size: 24px;
+            margin-bottom: 30px;
+            color: #00ffff;
+        }
+        
+        #restartBtn {
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(45deg, #00ff00, #00ffff);
+            border: none;
+            border-radius: 50px;
+            color: #000;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 5px 20px rgba(0, 255, 255, 0.5);
+        }
+        
+        #restartBtn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 255, 255, 0.7);
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .laser { color: #00ff00; }
+        .plasma { color: #ff00ff; }
+        .missile { color: #ff6b6b; }
+        .wave { color: #00ffff; }
+        .nuke { color: #ffaa00; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui">
+        <div class="ui-panel">
+            <div class="score-display">SCORE: <span id="score">0</span></div>
+            <div class="level-display">LEVEL: <span id="level">1</span></div>
+        </div>
+        
+        <div class="ui-panel weapon-selector">
+            <div class="weapon-name" id="weaponName">LASER</div>
+            <div class="weapon-list">
+                <div class="weapon-item active" data-weapon="0">⚡</div>
+                <div class="weapon-item" data-weapon="1">🔮</div>
+                <div class="weapon-item" data-weapon="2">🚀</div>
+                <div class="weapon-item" data-weapon="3">〰️</div>
+                <div class="weapon-item" data-weapon="4">☢️</div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="gameOver">
+        <h2>GAME OVER</h2>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <button id="restartBtn">PLAY AGAIN</button>
+    </div>
+    
+    <div class="controls">
+        Mouse: Aim & Shoot | Space/Click: Fire | Q/E or 1-5: Change Weapon
+    </div>
+    
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Game state
+        let score = 0;
+        let level = 1;
+        let gameRunning = true;
+        let currentWeapon = 0;
+        
+        // Weapon definitions
+        const weapons = [
+            {
+                name: 'LASER',
+                color: '#00ff00',
+                damage: 1,
+                speed: 20,
+                fireRate: 100,
+                size: 3,
+                type: 'laser'
+            },
+            {
+                name: 'PLASMA',
+                color: '#ff00ff',
+                damage: 2,
+                speed: 15,
+                fireRate: 200,
+                size: 8,
+                type: 'plasma'
+            },
+            {
+                name: 'MISSILE',
+                color: '#ff6b6b',
+                damage: 3,
+                speed: 12,
+                fireRate: 400,
+                size: 10,
+                type: 'missile',
+                explosive: true
+            },
+            {
+                name: 'WAVE',
+                color: '#00ffff',
+                damage: 1,
+                speed: 10,
+                fireRate: 300,
+                size: 5,
+                type: 'wave',
+                piercing: true
+            },
+            {
+                name: 'NUKE',
+                color: '#ffaa00',
+                damage: 10,
+                speed: 8,
+                fireRate: 1000,
+                size: 20,
+                type: 'nuke',
+                explosive: true,
+                explosionRadius: 150
+            }
+        ];
+        
+        // Player
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 100,
+            angle: -Math.PI / 2,
+            lastShot: 0
+        };
+        
+        // Arrays for game objects
+        const asteroids = [];
+        const bullets = [];
+        const particles = [];
+        const stars = [];
+        
+        // Mouse position
+        let mouseX = canvas.width / 2;
+        let mouseY = canvas.height / 2;
+        
+        // Create background stars
+        for (let i = 0; i < 200; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2,
+                speed: Math.random() * 0.5 + 0.1,
+                brightness: Math.random()
+            });
+        }
+        
+        // Asteroid class
+        class Asteroid {
+            constructor(x, y, size, health) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.health = health;
+                this.maxHealth = health;
+                this.vx = (Math.random() - 0.5) * 3;
+                this.vy = Math.random() * 2 + 1;
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.05;
+                this.vertices = this.generateShape();
+            }
+            
+            generateShape() {
+                const vertices = [];
+                const points = 8 + Math.floor(Math.random() * 5);
+                for (let i = 0; i < points; i++) {
+                    const angle = (i / points) * Math.PI * 2;
+                    const variance = 0.8 + Math.random() * 0.4;
+                    vertices.push({
+                        x: Math.cos(angle) * this.size * variance,
+                        y: Math.sin(angle) * this.size * variance
+                    });
+                }
+                return vertices;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.rotation += this.rotationSpeed;
+                
+                // Wrap around screen
+                if (this.x < -this.size) this.x = canvas.width + this.size;
+                if (this.x > canvas.width + this.size) this.x = -this.size;
+                if (this.y > canvas.height + this.size) {
+                    this.y = -this.size;
+                    this.x = Math.random() * canvas.width;
+                }
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                // Draw asteroid
+                ctx.beginPath();
+                ctx.moveTo(this.vertices[0].x, this.vertices[0].y);
+                for (let i = 1; i < this.vertices.length; i++) {
+                    ctx.lineTo(this.vertices[i].x, this.vertices[i].y);
+                }
+                ctx.closePath();
+                
+                // Gradient fill
+                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
+                const healthRatio = this.health / this.maxHealth;
+                gradient.addColorStop(0, `rgba(139, 69, 19, ${healthRatio})`);
+                gradient.addColorStop(1, `rgba(101, 67, 33, ${healthRatio * 0.8})`);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                
+                // Outline
+                ctx.strokeStyle = `rgba(255, 255, 255, ${healthRatio * 0.5})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Damage glow
+                if (this.health < this.maxHealth) {
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = '#ff6b6b';
+                    ctx.strokeStyle = '#ff6b6b';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
+            
+            takeDamage(damage) {
+                this.health -= damage;
+                
+                // Create damage particles
+                for (let i = 0; i < 10; i++) {
+                    particles.push(new Particle(
+                        this.x + (Math.random() - 0.5) * this.size,
+                        this.y + (Math.random() - 0.5) * this.size,
+                        '#ff6b6b'
+                    ));
+                }
+                
+                if (this.health <= 0) {
+                    this.destroy();
+                    return true;
+                }
+                return false;
+            }
+            
+            destroy() {
+                // Create explosion
+                for (let i = 0; i < 30; i++) {
+                    particles.push(new Particle(
+                        this.x + (Math.random() - 0.5) * this.size,
+                        this.y + (Math.random() - 0.5) * this.size,
+                        '#ffaa00'
+                    ));
+                }
+                
+                // Split into smaller asteroids
+                if (this.size > 20) {
+                    for (let i = 0; i < 2; i++) {
+                        const newSize = this.size * 0.6;
+                        const newHealth = Math.ceil(this.maxHealth * 0.6);
+                        const newAsteroid = new Asteroid(
+                            this.x + (Math.random() - 0.5) * this.size,
+                            this.y + (Math.random() - 0.5) * this.size,
+                            newSize,
+                            newHealth
+                        );
+                        newAsteroid.vx = (Math.random() - 0.5) * 5;
+                        newAsteroid.vy = (Math.random() - 0.5) * 3 + 1;
+                        asteroids.push(newAsteroid);
+                    }
+                }
+                
+                // Score based on size
+                score += Math.floor(100 * (50 / this.size));
+                updateScore();
+            }
+        }
+        
+        // Bullet class
+        class Bullet {
+            constructor(x, y, angle, weapon) {
+                this.x = x;
+                this.y = y;
+                this.vx = Math.cos(angle) * weapon.speed;
+                this.vy = Math.sin(angle) * weapon.speed;
+                this.weapon = weapon;
+                this.alive = true;
+                this.trail = [];
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Add to trail
+                this.trail.push({ x: this.x, y: this.y });
+                if (this.trail.length > 10) this.trail.shift();
+                
+                // Check bounds
+                if (this.x < 0 || this.x > canvas.width || 
+                    this.y < 0 || this.y > canvas.height) {
+                    this.alive = false;
+                }
+            }
+            
+            draw() {
+                // Draw trail
+                ctx.strokeStyle = this.weapon.color + '40';
+                ctx.lineWidth = this.weapon.size;
+                ctx.beginPath();
+                this.trail.forEach((point, i) => {
+                    if (i === 0) ctx.moveTo(point.x, point.y);
+                    else ctx.lineTo(point.x, point.y);
+                });
+                ctx.stroke();
+                
+                // Draw bullet
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                if (this.weapon.type === 'missile') {
+                    // Draw missile shape
+                    ctx.fillStyle = this.weapon.color;
+                    ctx.beginPath();
+                    ctx.moveTo(10, 0);
+                    ctx.lineTo(-5, -5);
+                    ctx.lineTo(-5, 5);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // Draw energy bullet
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = this.weapon.color;
+                    ctx.fillStyle = this.weapon.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.weapon.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+            
+            checkCollision(asteroid) {
+                const dx = this.x - asteroid.x;
+                const dy = this.y - asteroid.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < asteroid.size + this.weapon.size) {
+                    if (this.weapon.explosive) {
+                        this.explode();
+                    }
+                    if (!this.weapon.piercing) {
+                        this.alive = false;
+                    }
+                    return true;
+                }
+                return false;
+            }
+            
+            explode() {
+                const radius = this.weapon.explosionRadius || 50;
+                
+                // Create explosion effect
+                for (let i = 0; i < 50; i++) {
+                    const angle = (Math.PI * 2 * i) / 50;
+                    particles.push(new Particle(
+                        this.x + Math.cos(angle) * 10,
+                        this.y + Math.sin(angle) * 10,
+                        this.weapon.color,
+                        Math.cos(angle) * 8,
+                        Math.sin(angle) * 8
+                    ));
+                }
+                
+                // Damage nearby asteroids
+                asteroids.forEach(asteroid => {
+                    const dx = this.x - asteroid.x;
+                    const dy = this.y - asteroid.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < radius + asteroid.size) {
+                        asteroid.takeDamage(this.weapon.damage);
+                    }
+                });
+            }
+        }
+        
+        // Particle class
+        class Particle {
+            constructor(x, y, color, vx = null, vy = null) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx || (Math.random() - 0.5) * 10;
+                this.vy = vy || (Math.random() - 0.5) * 10;
+                this.color = color;
+                this.life = 1;
+                this.decay = 0.02;
+                this.size = Math.random() * 5 + 2;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= 0.98;
+                this.vy *= 0.98;
+                this.life -= this.decay;
+                this.size *= 0.98;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+        
+        // Input handling
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            // Update player angle
+            const dx = mouseX - player.x;
+            const dy = mouseY - player.y;
+            player.angle = Math.atan2(dy, dx);
+        });
+        
+        canvas.addEventListener('click', () => {
+            if (gameRunning) shoot();
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ') {
+                e.preventDefault();
+                if (gameRunning) shoot();
+            } else if (e.key === 'q' || e.key === 'Q') {
+                changeWeapon(-1);
+            } else if (e.key === 'e' || e.key === 'E') {
+                changeWeapon(1);
+            } else if (e.key >= '1' && e.key <= '5') {
+                selectWeapon(parseInt(e.key) - 1);
+            }
+        });
+        
+        function changeWeapon(direction) {
+            currentWeapon = (currentWeapon + direction + weapons.length) % weapons.length;
+            updateWeaponUI();
+        }
+        
+        function selectWeapon(index) {
+            if (index >= 0 && index < weapons.length) {
+                currentWeapon = index;
+                updateWeaponUI();
+            }
+        }
+        
+        function updateWeaponUI() {
+            document.getElementById('weaponName').textContent = weapons[currentWeapon].name;
+            document.getElementById('weaponName').className = 'weapon-name ' + weapons[currentWeapon].type;
+            
+            document.querySelectorAll('.weapon-item').forEach((item, index) => {
+                item.classList.toggle('active', index === currentWeapon);
+            });
+        }
+        
+        function shoot() {
+            const now = Date.now();
+            const weapon = weapons[currentWeapon];
+            
+            if (now - player.lastShot > weapon.fireRate) {
+                bullets.push(new Bullet(player.x, player.y, player.angle, weapon));
+                player.lastShot = now;
+                
+                // Muzzle flash
+                for (let i = 0; i < 5; i++) {
+                    particles.push(new Particle(
+                        player.x + Math.cos(player.angle) * 30,
+                        player.y + Math.sin(player.angle) * 30,
+                        weapon.color
+                    ));
+                }
+            }
+        }
+        
+        function spawnAsteroids() {
+            const count = 3 + Math.floor(level / 2);
+            for (let i = 0; i < count; i++) {
+                const size = 30 + Math.random() * 40 + (level * 5);
+                const health = Math.ceil(size / 15);
+                asteroids.push(new Asteroid(
+                    Math.random() * canvas.width,
+                    -100 - Math.random() * 200,
+                    size,
+                    health
+                ));
+            }
+        }
+        
+        function updateScore() {
+            document.getElementById('score').textContent = score;
+            
+            // Check for level up
+            const nextLevelScore = level * 1000;
+            if (score >= nextLevelScore) {
+                level++;
+                document.getElementById('level').textContent = level;
+                
+                // Level up effect
+                for (let i = 0; i < 100; i++) {
+                    const angle = (Math.PI * 2 * i) / 100;
+                    particles.push(new Particle(
+                        canvas.width / 2,
+                        canvas.height / 2,
+                        '#00ffff',
+                        Math.cos(angle) * 15,
+                        Math.sin(angle) * 15
+                    ));
+                }
+            }
+        }
+        
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.angle + Math.PI / 2);
+            
+            // Draw ship
+            ctx.fillStyle = '#00ffff';
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#00ffff';
+            
+            ctx.beginPath();
+            ctx.moveTo(0, -30);
+            ctx.lineTo(-15, 15);
+            ctx.lineTo(0, 10);
+            ctx.lineTo(15, 15);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // Engine glow
+            ctx.fillStyle = '#ff6b6b';
+            ctx.beginPath();
+            ctx.arc(0, 15, 5 + Math.random() * 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        function restart() {
+            score = 0;
+            level = 1;
+            currentWeapon = 0;
+            gameRunning = true;
+            asteroids.length = 0;
+            bullets.length = 0;
+            particles.length = 0;
+            player.lastShot = 0;
+            
+            updateScore();
+            document.getElementById('level').textContent = level;
+            updateWeaponUI();
+            document.getElementById('gameOver').style.display = 'none';
+            
+            spawnAsteroids();
+        }
+        
+        document.getElementById('restartBtn').addEventListener('click', restart);
+        
+        function gameLoop() {
+            // Clear canvas
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw stars
+            stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+                
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness})`;
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+            });
+            
+            if (gameRunning) {
+                // Update and draw asteroids
+                asteroids.forEach((asteroid, index) => {
+                    asteroid.update();
+                    asteroid.draw();
+                    
+                    // Check collision with player
+                    const dx = player.x - asteroid.x;
+                    const dy = player.y - asteroid.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < asteroid.size + 20) {
+                        gameOver();
+                    }
+                });
+                
+                // Update and draw bullets
+                bullets.forEach((bullet, bulletIndex) => {
+                    bullet.update();
+                    bullet.draw();
+                    
+                    // Check collisions with asteroids
+                    asteroids.forEach((asteroid, asteroidIndex) => {
+                        if (bullet.checkCollision(asteroid)) {
+                            if (asteroid.takeDamage(bullet.weapon.damage)) {
+                                asteroids.splice(asteroidIndex, 1);
+                            }
+                        }
+                    });
+                });
+                
+                // Remove dead bullets
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    if (!bullets[i].alive) {
+                        bullets.splice(i, 1);
+                    }
+                }
+                
+                // Spawn new asteroids
+                if (asteroids.length < 2) {
+                    spawnAsteroids();
+                }
+                
+                // Draw player
+                drawPlayer();
+            }
+            
+            // Update and draw particles
+            particles.forEach((particle, index) => {
+                particle.update();
+                particle.draw();
+                
+                if (particle.life <= 0) {
+                    particles.splice(index, 1);
+                }
+            });
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            player.x = canvas.width / 2;
+            player.y = canvas.height - 100;
+        });
+        
+        // Start game
+        updateWeaponUI();
+        spawnAsteroids();
+        gameLoop();
+    </script>
+</body>
+</html>
